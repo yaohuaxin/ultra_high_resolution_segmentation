@@ -1,3 +1,5 @@
+# Modify for PAIP 2019
+
 # GLNet for Memory-Efficient Segmentation of Ultra-High Resolution Images
 
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/chenwydj/ultra_high_resolution_segmentation.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/chenwydj/ultra_high_resolution_segmentation/context:python) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
