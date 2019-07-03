@@ -31,6 +31,8 @@ class Options():
         parser.add_argument('--path_g2l', type=str, default="", help='name for local from global model path')
         parser.add_argument('--path_l2g', type=str, default="", help='name for global from local model path')
         parser.add_argument('--lamb_fmreg', type=float, default=0.15, help='loss weight feature map regularization')
+        parser.add_argument('--data_loader_worker', type=int, default=1, help='works to load data')
+        parser.add_argument('--image_level', type=int, default=2, help='the image level in svs to be used')
 
         # the parser
         self.parser = parser
@@ -39,9 +41,9 @@ class Options():
         args = self.parser.parse_args()
         # default settings for epochs and lr
         if args.mode == 1 or args.mode == 3:
-            args.num_epochs = 120
+            args.num_epochs = 1 #120 # for debugging
             args.lr = 5e-5
         else:
-            args.num_epochs = 50
+            args.num_epochs = 1 #50  # for debugging
             args.lr = 2e-5
         return args

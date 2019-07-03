@@ -39,16 +39,18 @@ class ConfusionMatrix(object):
         hist = self.confusion_matrix
         # accuracy is recall/sensitivity for each class, predicted TP / all real positives
         # axis in sum: perform summation along
-        acc = np.nan_to_num(np.diag(hist) / hist.sum(axis=1))
-        acc_mean = np.mean(np.nan_to_num(acc))
+        with np.errstate(divide='ignore',invalid='ignore'):
+            acc = np.nan_to_num(np.diag(hist) / hist.sum(axis=1))
+            acc_mean = np.mean(np.nan_to_num(acc))
+            
+            intersect = np.diag(hist)
+            union = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
+            iou = intersect / union
+            mean_iou = np.mean(np.nan_to_num(iou))
+            
+            freq = hist.sum(axis=1) / hist.sum() # freq of each target
         
-        intersect = np.diag(hist)
-        union = hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist)
-        iou = intersect / union
-        mean_iou = np.mean(np.nan_to_num(iou))
-        
-        freq = hist.sum(axis=1) / hist.sum() # freq of each target
-        # fwavacc = (freq[freq > 0] * iou[freq > 0]).sum()
+        # fwavacc = (freq[freq > 0] * iou[freq > 0]).sum()            
         freq_iou = (freq * iou).sum()
 
         return {'accuracy': acc,
