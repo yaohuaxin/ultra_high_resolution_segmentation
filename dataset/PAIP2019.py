@@ -7,6 +7,7 @@ import numpy as np
 # import matplotlib.pyplot as plt
 from PIL import Image, ImageFile
 import skimage
+import skimage.io as skimage_io
 import openslide
 import random
 from torchvision.transforms import ToTensor
@@ -84,9 +85,9 @@ class PAIP2019(data.Dataset):
             if self.image_level == 0:
                 pass
             elif self.image_level == 1:
-                label = skimage.io.imread(os.path.join(self.root, self.ids[index], global_mask_file_level_1))
+                label = skimage_io.imread(os.path.join(self.root, self.ids[index], global_mask_file_level_1))
             elif self.image_level == 2:
-                label = skimage.io.imread(os.path.join(self.root, self.ids[index], global_mask_file_level_2))
+                label = skimage_io.imread(os.path.join(self.root, self.ids[index], global_mask_file_level_2))
             else:
                 pass
             #print(type(label))
