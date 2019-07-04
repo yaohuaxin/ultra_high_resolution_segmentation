@@ -1,3 +1,7 @@
+#
+backup/*
+generetedFiles/*
+
 # vim swp files
 *.swp
 # caffe/pytorch model files
