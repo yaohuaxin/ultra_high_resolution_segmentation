@@ -197,7 +197,7 @@ def collate_test(batch):
 
 def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, path_g2l=None, path_l2g=None):
     model = fpn(n_class)
-    model = nn.DataParallel(model)
+    #model = nn.DataParallel(model)
     model = model.cuda()
 
     if (mode == 2 and not evaluation) or (mode == 1 and evaluation):
@@ -248,11 +248,11 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
         model.load_state_dict(state)
 
     if mode == 1 or mode == 3:
-        model.module.resnet_local.eval()
-        model.module.fpn_local.eval()
+        model.resnet_local.eval()
+        model.fpn_local.eval()
     else:
-        model.module.resnet_global.eval()
-        model.module.fpn_global.eval()
+        model.resnet_global.eval()
+        model.fpn_global.eval()
     
     return model, global_fixed
 
@@ -261,20 +261,20 @@ def get_optimizer(model, mode=1, learning_rate=2e-5):
     if mode == 1 or mode == 3:
         # train global
         optimizer = torch.optim.Adam([
-                {'params': model.module.resnet_global.parameters(), 'lr': learning_rate},
-                {'params': model.module.resnet_local.parameters(), 'lr': 0},
-                {'params': model.module.fpn_global.parameters(), 'lr': learning_rate},
-                {'params': model.module.fpn_local.parameters(), 'lr': 0},
-                {'params': model.module.ensemble_conv.parameters(), 'lr': learning_rate},
+                {'params': model.resnet_global.parameters(), 'lr': learning_rate},
+                {'params': model.resnet_local.parameters(), 'lr': 0},
+                {'params': model.fpn_global.parameters(), 'lr': learning_rate},
+                {'params': model.fpn_local.parameters(), 'lr': 0},
+                {'params': model.ensemble_conv.parameters(), 'lr': learning_rate},
             ], weight_decay=5e-4)
     else:
         # train local
         optimizer = torch.optim.Adam([
-                {'params': model.module.resnet_global.parameters(), 'lr': 0},
-                {'params': model.module.resnet_local.parameters(), 'lr': learning_rate},
-                {'params': model.module.fpn_global.parameters(), 'lr': 0},
-                {'params': model.module.fpn_local.parameters(), 'lr': learning_rate},
-                {'params': model.module.ensemble_conv.parameters(), 'lr': learning_rate},
+                {'params': model.resnet_global.parameters(), 'lr': 0},
+                {'params': model.resnet_local.parameters(), 'lr': learning_rate},
+                {'params': model.fpn_global.parameters(), 'lr': 0},
+                {'params': model.fpn_local.parameters(), 'lr': learning_rate},
+                {'params': model.ensemble_conv.parameters(), 'lr': learning_rate},
             ], weight_decay=5e-4)
     return optimizer
 
@@ -301,13 +301,13 @@ class Trainer(object):
         # self.template, self.coordinates = template_patch2global(size0, size_p, n, self.step)
     
     def set_train(self, model):
-        model.module.ensemble_conv.train()
+        model.ensemble_conv.train()
         if self.mode == 1 or self.mode == 3:
-            model.module.resnet_global.train()
-            model.module.fpn_global.train()
+            model.resnet_global.train()
+            model.fpn_global.train()
         else:
-            model.module.resnet_local.train()
-            model.module.fpn_local.train()
+            model.resnet_local.train()
+            model.fpn_local.train()
 
     def get_scores(self):
         score_train = self.metrics.get_scores()

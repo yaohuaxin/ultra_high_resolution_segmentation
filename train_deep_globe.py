@@ -26,6 +26,10 @@ n_class = args.n_class
 
 # torch.cuda.synchronize()
 # torch.backends.cudnn.benchmark = True
+
+# Huaxin
+# torch.backends.cudnn.enabled = False
+
 torch.backends.cudnn.deterministic = True
 
 data_path = args.data_path
