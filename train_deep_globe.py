@@ -58,24 +58,20 @@ print("    Mode: 1: train global; 2: train local from global; 3: train global fr
 print("preparing datasets and dataloaders......")
 batch_size = args.batch_size
 
-ids_train = []
-for image_fold in os.listdir(os.path.join(data_path, "Training_phase_1/")):
-    if os.path.isdir(os.path.join(data_path, "Training_phase_1/", image_fold)):
-        ids_train.append(image_fold)
-        
-ids_val = []
-for image_fold in os.listdir(os.path.join(data_path, "Training_phase_1/")):
-    if os.path.isdir(os.path.join(data_path, "Training_phase_1/", image_fold)):
-        ids_val.append(image_fold)
-        
-ids_test = []
-for image_fold in os.listdir(os.path.join(data_path, "Training_phase_1/")):
-    if os.path.isdir(os.path.join(data_path, "Training_phase_1/", image_fold)):
-        ids_test.append(image_fold)
+ids_images = []
+for phase_fold in os.listdir(data_path):
+    if os.path.isdir(os.path.join(data_path, phase_fold)):
+        for image_fold in os.listdir(os.path.join(data_path, phase_fold)):
+            if os.path.isdir(os.path.join(data_path, phase_fold, image_fold)):
+                ids_images.append(os.path.join(phase_fold, image_fold))
 
-print("==== Debug: ", "\nids_train: ", ids_train, 
-                      "\nids_val  : ", ids_val, 
-                      "\nids_test : ", ids_test)
+ids_train = ids_images[0:-5]
+ids_val   = ids_images[-5:]
+ids_test  = ids_images[-5:]
+
+print("==== ids_train: ", ids_train)
+print("==== ids_val: ", ids_val)
+print("==== ids_test: ", ids_test)
 
 dataset_train = PAIP2019(os.path.join(data_path, "Training_phase_1/"), ids_train, label=True, transform=True, image_level=image_level)
 dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate, shuffle=True, pin_memory=True)
