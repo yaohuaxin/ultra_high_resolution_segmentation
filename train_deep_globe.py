@@ -73,7 +73,7 @@ print("==== ids_train: ", ids_train)
 print("==== ids_val: ", ids_val)
 print("==== ids_test: ", ids_test)
 
-dataset_train = PAIP2019(os.path.join(data_path, "Training_phase_1/"), ids_train, label=True, transform=True, image_level=image_level)
+dataset_train = PAIP2019(data_path, ids_train, label=True, transform=True, image_level=image_level)
 dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate, shuffle=True, pin_memory=True)
 #sample = dataset_train[0]
 #print("Image size: ", sample['image'].size)
@@ -81,10 +81,10 @@ dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size
 #dataset_train[1]
 #dataset_train[2]
 
-dataset_val = PAIP2019(os.path.join(data_path, "Training_phase_1/"), ids_val, label=True, image_level=image_level)
+dataset_val = PAIP2019(data_path, ids_val, label=True, image_level=image_level)
 dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate, shuffle=False, pin_memory=True)
 
-dataset_test = PAIP2019(os.path.join(data_path, "Training_phase_1/"), ids_test, label=False, image_level=image_level)
+dataset_test = PAIP2019(data_path, ids_test, label=False, image_level=image_level)
 dataloader_test = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate_test, shuffle=False, pin_memory=True)
 
 ##### sizes are (w, h) ##############################
