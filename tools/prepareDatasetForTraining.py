@@ -38,10 +38,9 @@ def resize(packageFold):
     '''
     img_1 = wsi.read_region((0, 0), 1, wsi.level_dimensions[1]).convert('RGB')
     print("Image level 1 size (width, height)", img_1.size)
-    '''
+
     img_2 = wsi.read_region((0, 0), 2, wsi.level_dimensions[2]).convert('RGB')
     print("Image level 2 size (width, height)", img_2.size)
-    '''
     
     #
     # Read viable mask
@@ -68,18 +67,14 @@ def resize(packageFold):
     print("viable_mask_level_1 shap (rows, columns): ", viable_mask_level_1.shape)
     io.imsave(viable_mask_path.replace("viable.tif", "viable_level_1.tif"), viable_mask_level_1)
     
-    '''
     print("Resize viable_mask, from: ", viable_mask_path)
     print("                      to: ", viable_mask_path.replace("viable.tif", "viable_level_2.tif"))
     viable_mask_level_2 = transform.resize(viable_mask, (img_2.size[1], img_2.size[0]))
     print("viable_mask_level_2 shap (rows, columns): ", viable_mask_level_2.shape)
     io.imsave(viable_mask_path.replace("viable.tif", "viable_level_2.tif"), viable_mask_level_2)
-    '''
     #io.imshow(viable_mask_level_2)
     #io.show()
     #print(viable_mask_level_2)
-    
-    
     
     #
     # Read whole mask
@@ -97,13 +92,11 @@ def resize(packageFold):
     print("whole_mask_level_1 shap (rows, columns): ", whole_mask_level_1.shape)
     io.imsave(whole_mask_path.replace("whole.tif", "whole_level_1.tif"), whole_mask_level_1)
     
-    '''
     print("Resize whole_mask, from: ", whole_mask_path)
     print("                     to: ", whole_mask_path.replace("whole.tif", "whole_level_2.tif"))
     whole_mask_level_2 = transform.resize(whole_mask, (img_2.size[1], img_2.size[0]))
     print("whole_mask_level_2 shap (rows, columns): ", whole_mask_level_2.shape)
     io.imsave(whole_mask_path.replace("whole.tif", "whole_level_2.tif"), whole_mask_level_2)
-    '''
 
     print("==== ==== Leave fold: ", packageFold)
 
@@ -126,10 +119,9 @@ def main():
     for fold in packageFolds:
         print(fold)
     
-    '''
-    p = Pool(4)
+    p = Pool(10)
     p.map(resize, packageFolds)
-    '''
+
     
 
 if __name__ == "__main__":
