@@ -164,7 +164,7 @@ for epoch in range(num_epochs):
     trainer.reset_metrics()
     # torch.cuda.empty_cache()
 
-    if (epoch+1) % 1 == 0:
+    if (epoch+1) % 5 == 0:
         with torch.no_grad():
             model.eval()
             print("\n"+"evaluating on epoch: ", (epoch+1))
