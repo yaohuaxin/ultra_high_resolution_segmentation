@@ -13,7 +13,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 def is_image_file(filename):
-    return any(filename.endswith(extension) for extension in [".svs", ".tif"])
+    return any(filename.endswith(extension) for extension in [".svs", ".SVS", ".tif"])
 
 
 def find_label_map_name(img_filenames, labelExtension=".png"):

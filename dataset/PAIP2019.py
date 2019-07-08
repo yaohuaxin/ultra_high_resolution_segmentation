@@ -43,7 +43,7 @@ class PAIP2019(data.Dataset):
         #print(image_and_labels)
         
         for item in image_and_labels:
-            if item.endswith("svs"):
+            if item.endswith("svs") or item.endswith("SVS"):
                 image_file = item
                 #print("image_file: ", image_file)
                 
