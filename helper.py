@@ -257,25 +257,45 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
     return model, global_fixed
 
 
-def get_optimizer(model, mode=1, learning_rate=2e-5):
-    if mode == 1 or mode == 3:
-        # train global
-        optimizer = torch.optim.Adam([
-                {'params': model.resnet_global.parameters(), 'lr': learning_rate},
-                {'params': model.resnet_local.parameters(), 'lr': 0},
-                {'params': model.fpn_global.parameters(), 'lr': learning_rate},
-                {'params': model.fpn_local.parameters(), 'lr': 0},
-                {'params': model.ensemble_conv.parameters(), 'lr': learning_rate},
-            ], weight_decay=5e-4)
+def get_optimizer(model, mode=1, parallel=False, learning_rate=2e-5):
+    if not parallel:
+        if mode == 1 or mode == 3:
+            # train global
+            optimizer = torch.optim.Adam([
+                    {'params': model.resnet_global.parameters(), 'lr': learning_rate},
+                    {'params': model.resnet_local.parameters(), 'lr': 0},
+                    {'params': model.fpn_global.parameters(), 'lr': learning_rate},
+                    {'params': model.fpn_local.parameters(), 'lr': 0},
+                    {'params': model.ensemble_conv.parameters(), 'lr': learning_rate},
+                ], weight_decay=5e-4)
+        else:
+            # train local
+            optimizer = torch.optim.Adam([
+                    {'params': model.resnet_global.parameters(), 'lr': 0},
+                    {'params': model.resnet_local.parameters(), 'lr': learning_rate},
+                    {'params': model.fpn_global.parameters(), 'lr': 0},
+                    {'params': model.fpn_local.parameters(), 'lr': learning_rate},
+                    {'params': model.ensemble_conv.parameters(), 'lr': learning_rate},
+                ], weight_decay=5e-4)
     else:
-        # train local
-        optimizer = torch.optim.Adam([
-                {'params': model.resnet_global.parameters(), 'lr': 0},
-                {'params': model.resnet_local.parameters(), 'lr': learning_rate},
-                {'params': model.fpn_global.parameters(), 'lr': 0},
-                {'params': model.fpn_local.parameters(), 'lr': learning_rate},
-                {'params': model.ensemble_conv.parameters(), 'lr': learning_rate},
-            ], weight_decay=5e-4)
+        if mode == 1 or mode == 3:
+            # train global
+            optimizer = torch.optim.Adam([
+                    {'params': model.module.resnet_global.parameters(), 'lr': learning_rate},
+                    {'params': model.module.resnet_local.parameters(), 'lr': 0},
+                    {'params': model.module.fpn_global.parameters(), 'lr': learning_rate},
+                    {'params': model.module.fpn_local.parameters(), 'lr': 0},
+                    {'params': model.module.ensemble_conv.parameters(), 'lr': learning_rate},
+                ], weight_decay=5e-4)
+        else:
+            # train local
+            optimizer = torch.optim.Adam([
+                    {'params': model.module.resnet_global.parameters(), 'lr': 0},
+                    {'params': model.module.resnet_local.parameters(), 'lr': learning_rate},
+                    {'params': model.module.fpn_global.parameters(), 'lr': 0},
+                    {'params': model.module.fpn_local.parameters(), 'lr': learning_rate},
+                    {'params': model.module.ensemble_conv.parameters(), 'lr': learning_rate},
+                ], weight_decay=5e-4)
     return optimizer
 
 
@@ -300,14 +320,23 @@ class Trainer(object):
         # self.step = (size0[0] - size_p[0]) // (n - 1)
         # self.template, self.coordinates = template_patch2global(size0, size_p, n, self.step)
     
-    def set_train(self, model):
-        model.ensemble_conv.train()
-        if self.mode == 1 or self.mode == 3:
-            model.resnet_global.train()
-            model.fpn_global.train()
+    def set_train(self, model, parallel=False):
+        if not parallel:
+            model.ensemble_conv.train()
+            if self.mode == 1 or self.mode == 3:
+                model.resnet_global.train()
+                model.fpn_global.train()
+            else:
+                model.resnet_local.train()
+                model.fpn_local.train()
         else:
-            model.resnet_local.train()
-            model.fpn_local.train()
+            model.module.ensemble_conv.train()
+            if self.mode == 1 or self.mode == 3:
+                model.module.resnet_global.train()
+                model.module.fpn_global.train()
+            else:
+                model.module.resnet_local.train()
+                model.module.fpn_local.train()
 
     def get_scores(self):
         score_train = self.metrics.get_scores()
@@ -320,7 +349,7 @@ class Trainer(object):
         self.metrics_local.reset()
         self.metrics_global.reset()
 
-    def train(self, sample, model, global_fixed):
+    def train(self, sample, model, global_fixed, parallel=True):
         images, labels = sample['image'], sample['label'] # PIL images
         labels_npy = masks_transform(labels, numpy=True) # label of origin size in numpy
 
@@ -384,8 +413,13 @@ class Trainer(object):
                 # while j < self.n**2:
                 while j < len(coordinates[i]):
                     patches_var = images_transform(patches[i][j : j+self.sub_batch_size]) # b, c, h, w
-                    # fm_patches, output_patches = model.module.collect_local_fm(images_glb[i:i+1], patches_var, self.ratio, self.coordinates, [j, j+self.sub_batch_size], len(images), global_model=global_fixed, template=self.template, n_patch_all=self.n**2) # include cordinates
-                    fm_patches, output_patches = model.module.collect_local_fm(images_glb[i:i+1], patches_var, ratios[i], coordinates[i], [j, j+self.sub_batch_size], len(images), global_model=global_fixed, template=self.template, n_patch_all=len(coordinates[i]))
+                    if parallel:
+                        # fm_patches, output_patches = model.module.collect_local_fm(images_glb[i:i+1], patches_var, self.ratio, self.coordinates, [j, j+self.sub_batch_size], len(images), global_model=global_fixed, template=self.template, n_patch_all=self.n**2) # include cordinates
+                        fm_patches, output_patches = model.module.collect_local_fm(images_glb[i:i+1], patches_var, ratios[i], coordinates[i], [j, j+self.sub_batch_size], len(images), global_model=global_fixed, template=self.template, n_patch_all=len(coordinates[i]))
+                    else:
+                        # fm_patches, output_patches = model.module.collect_local_fm(images_glb[i:i+1], patches_var, self.ratio, self.coordinates, [j, j+self.sub_batch_size], len(images), global_model=global_fixed, template=self.template, n_patch_all=self.n**2) # include cordinates
+                        fm_patches, output_patches = model.collect_local_fm(images_glb[i:i+1], patches_var, ratios[i], coordinates[i], [j, j+self.sub_batch_size], len(images), global_model=global_fixed, template=self.template, n_patch_all=len(coordinates[i]))
+                    
                     predicted_patches[i][j:j+output_patches.size()[0]] = F.interpolate(output_patches, size=self.size_p, mode='nearest').data.cpu().numpy()
                     j += self.sub_batch_size
             # train on global image
@@ -401,11 +435,21 @@ class Trainer(object):
                     label_patches_var = masks_transform(resize(label_patches[i][j : j+self.sub_batch_size], (self.size_p[0] // 4, self.size_p[1] // 4), label=True))
                     # label_patches_var = masks_transform(resize(label_patches[i][j : j+self.sub_batch_size], self.size_p, label=True))
                     fl = fm_patches[i][j : j+self.sub_batch_size].cuda()
-                    # fg = model.module._crop_global(fm_global[i:i+1], self.coordinates[j:j+self.sub_batch_size], self.ratio)[0]
-                    fg = model.module._crop_global(fm_global[i:i+1], coordinates[i][j:j+self.sub_batch_size], ratios[i])[0]
+                    if parallel:
+                        # fg = model.module._crop_global(fm_global[i:i+1], self.coordinates[j:j+self.sub_batch_size], self.ratio)[0]
+                        fg = model.module._crop_global(fm_global[i:i+1], coordinates[i][j:j+self.sub_batch_size], ratios[i])[0]
+                    else:
+                        # fg = model.module._crop_global(fm_global[i:i+1], self.coordinates[j:j+self.sub_batch_size], self.ratio)[0]
+                        fg = model._crop_global(fm_global[i:i+1], coordinates[i][j:j+self.sub_batch_size], ratios[i])[0]
+
                     fg = F.interpolate(fg, size=fl.size()[2:], mode='bilinear')
-                    output_ensembles = model.module.ensemble(fl, fg)
-                    # output_ensembles = F.interpolate(model.module.ensemble(fl, fg), self.size_p, **model.module._up_kwargs)
+                    if parallel:
+                        output_ensembles = model.module.ensemble(fl, fg)
+                        # output_ensembles = F.interpolate(model.module.ensemble(fl, fg), self.size_p, **model.module._up_kwargs)
+                    else:
+                        output_ensembles = model.ensemble(fl, fg)
+                        # output_ensembles = F.interpolate(model.module.ensemble(fl, fg), self.size_p, **model.module._up_kwargs)
+
                     loss = self.criterion(output_ensembles, label_patches_var)# + 0.15 * mse(fl, fg)
                     # if i == len(images) - 1 and j + self.sub_batch_size >= self.n**2:
                     if i == len(images) - 1 and j + self.sub_batch_size >= len(coordinates[i]):
