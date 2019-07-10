@@ -87,7 +87,7 @@ else:
     local_rank = args.local_rank
     print("Will use distributted mode, and run on rank:", local_rank)
     
-    torch.cuda.set_device(local_rank)    
+    torch.cuda.set_device(local_rank)
     torch.distributed.init_process_group(backend="nccl", init_method="env://")
 
     # to synchronize start of time
@@ -192,6 +192,7 @@ else:
     best_pred = 0.0
     print("start training......")
     for epoch in range(num_epochs):
+        # Huaxin: model_ddp.train is not called.
         trainer.set_train(model_ddp, parallel=True)
         optimizer.zero_grad()
         
@@ -224,7 +225,7 @@ else:
 
         if (epoch+1) % 5 == 0:
             with torch.no_grad():
-                model.eval()
+                model_ddp.eval()
                 print("\n"+"evaluating on epoch: ", (epoch+1))
     
                 if test:
@@ -233,7 +234,7 @@ else:
                     tbar = tqdm(dataloader_val)
     
                 for i_batch, sample_batched in enumerate(tbar):
-                    predictions, predictions_global, predictions_local = evaluator.eval_test(sample_batched, model, global_fixed)
+                    predictions, predictions_global, predictions_local = evaluator.eval_test(sample_batched, model_ddp, global_fixed)
                     score_val, score_val_global, score_val_local = evaluator.get_scores()
                     if mode == 1: 
                         tbar.set_description('global mIoU: %.3f' % (np.mean(np.nan_to_num(score_val_global["iou"]))))
@@ -264,14 +265,21 @@ else:
     
                 # torch.cuda.empty_cache()
     
-                if mode == 1:
-                    if not (test or evaluation): torch.save(model.state_dict(), os.path.join(model_path, path_g))
-                elif mode == 2:
-                    if not (test or evaluation): torch.save(model.state_dict(), os.path.join(model_path, path_g2l))
-                elif mode == 3:
-                    if not (test or evaluation): torch.save(model.state_dict(), os.path.join(model_path, path_l2g))
-                else:
-                    pass
+                if torch.distributed.get_rank() == 0:
+                    # All processes should see same parameters as they all start from same
+                    # random parameters and gradients are synchronized in backward passes.
+                    # Therefore, saving it in one process is sufficient.
+                    if mode == 1:
+                        if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g))
+                    elif mode == 2:
+                        if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g2l))
+                    elif mode == 3:
+                        if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_l2g))
+                    else:
+                        pass
+                
+                # Use a barrier() to make sure that below work started after rank 0 finish saveing the states.
+                torch.distributed.barrier()
                 
                 if test:
                     break
