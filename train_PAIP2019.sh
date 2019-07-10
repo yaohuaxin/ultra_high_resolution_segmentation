@@ -1,13 +1,13 @@
 #export CUDA_VISIBLE_DEVICES=0
 
-echo "Start train mode: 1."
-python -u train_deep_globe.py \
+echo "Start train mode: 2."
+python -u -m torch.distributed.launch --nproc_per_node 4 --nnodes 1 train_deep_globe.py \
 --n_class 3 \
 --data_path  "/home/shhxyao/huaxin/projects/ai/contest/DatasetPAIP2019/" \
 --model_path "$(pwd)/generetedFiles/saved_models/" \
 --log_path   "$(pwd)/generetedFiles/runs/" \
 --task_name "PAIP2019.yaohuaxin.ibm" \
---mode 1 \
+--mode 2 \
 --batch_size 1 \
 --sub_batch_size 1 \
 --size_g 2000 \

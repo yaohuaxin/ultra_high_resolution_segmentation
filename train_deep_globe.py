@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function
 import os
 import pathlib
 import numpy as np
+import random
 import torch
 import torch.nn as nn
 from torchvision import transforms
@@ -19,14 +20,20 @@ from tensorboardX import SummaryWriter
 from helper import create_model_load_weights, get_optimizer, Trainer, Evaluator, collate, collate_test
 from option import Options
 
+# from torch.nn.parallel import DistributedDataParallel as DDP
+# Why use apex: https://github.com/pytorch/pytorch/issues/13273
+# Tested with https://github.com/NVIDIA/apex.git,
+#     Commit ID: 665b2dd7dc9d5129d7541bad612c1d86ba4b6818
+from apex.parallel import DistributedDataParallel as DDP
+
 #
 # System wide configurations
 #
 np.set_printoptions(linewidth=200)
 # torch.cuda.synchronize()
-# torch.backends.cudnn.benchmark = True
 # torch.backends.cudnn.enabled = False
 torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 # Enable LMS (Large model support)
 torch.cuda.set_enabled_lms(True)
@@ -67,15 +74,54 @@ path_g   = os.path.join(model_path, args.path_g)
 path_g2l = os.path.join(model_path, args.path_g2l)
 path_l2g = os.path.join(model_path, args.path_l2g)
 
-print("============Model Information (Begin)==========================")
-print("Task name   :", task_name)
-print("Running mode:", mode, "; evaluation:", evaluation, "; test:", test)
-print("size_g:", size_g, "; batch_size  :", batch_size, "; size_p", size_p, "; sub_batch_size:", sub_batch_size)
-print("============Model Information (End)============================")
+distributed = int(os.environ["WORLD_SIZE"]) > 1 if "WORLD_SIZE" in os.environ else False
+world_size  = int(os.environ["WORLD_SIZE"]) if distributed else 1
 
-if not os.path.isdir(model_path): pathlib.Path(model_path).mkdir(parents=True)
-if not os.path.isdir(log_path): pathlib.Path(log_path).mkdir(parents=True)
+if (not distributed):
+    print("Please run in distributted mode.")
+    exit(1)
 
+local_rank = args.local_rank
+torch.cuda.set_device(local_rank)
+torch.distributed.init_process_group(backend="nccl", init_method="env://")
+
+if (torch.distributed.get_rank()==0):
+    print("============Model Information (Begin)==========================")
+    print("Running in distributted:", distributed)
+    print("Task name   :", task_name)
+    print("Running mode:", mode, "; evaluation:", evaluation, "; test:", test)
+    print("size_g:", size_g, "; batch_size  :", batch_size, "; size_p", size_p, "; sub_batch_size:", sub_batch_size)
+    print("============Model Information (End)============================")
+
+    if not os.path.isdir(model_path):
+        pathlib.Path(model_path).mkdir(parents=True)
+    if not os.path.isdir(log_path):
+        pathlib.Path(log_path).mkdir(parents=True)
+    
+    pass
+
+# to synchronize start of time
+torch.distributed.broadcast(torch.tensor([1], device="cuda"), 0)
+torch.cuda.synchronize()
+
+# Explicitly setting seed to make sure that models created in all processes 
+# start from same random weights and biases.
+# https://pytorch.org/docs/stable/notes/randomness.html
+seed_tensor = torch.tensor(0, dtype=torch.float32, device=torch.device("cuda"))
+if torch.distributed.get_rank() == 0:
+    # seed = int(time.time())
+    # random master seed, random.SystemRandom() uses /dev/urandom on Unix
+    master_seed = random.SystemRandom().randint(0, 2 ** 32 - 1)    
+    seed_tensor = torch.tensor(master_seed, dtype=torch.float32, device=torch.device("cuda"))
+
+torch.distributed.broadcast(seed_tensor, 0)
+master_seed = int(seed_tensor.item())
+
+torch.manual_seed(master_seed)
+torch.cuda.manual_seed(master_seed)    
+np.random.seed(master_seed)
+random.seed(master_seed)
+    
 #
 # Dataset and Dataloader
 #
@@ -95,19 +141,38 @@ ids_test  = ids_images[-8:]
 # print("==== ids_test: ", ids_test)
 
 dataset_train = PAIP2019(data_path, ids_train, label=True, transform=True, image_level=image_level)
-dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate, shuffle=True, pin_memory=True)
+sampler_train = torch.utils.data.distributed.DistributedSampler(dataset_train, world_size, local_rank)
+dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=batch_size, 
+                                               num_workers=data_loader_worker, collate_fn=collate, 
+                                               shuffle=False, pin_memory=True, sampler=sampler_train)
 
 dataset_val = PAIP2019(data_path, ids_val, label=True, image_level=image_level)
-dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate, shuffle=False, pin_memory=True)
+sampler_val = torch.utils.data.distributed.DistributedSampler(dataset_val, world_size, local_rank)
+dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, batch_size=batch_size, 
+                                             num_workers=data_loader_worker, collate_fn=collate, 
+                                             shuffle=False, pin_memory=True, sampler=sampler_val)
 
 dataset_test = PAIP2019(data_path, ids_test, label=False, image_level=image_level)
-dataloader_test = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate_test, shuffle=False, pin_memory=True)
+sampler_test = torch.utils.data.distributed.DistributedSampler(dataset_test, world_size, local_rank)
+dataloader_test = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=batch_size,
+                                              num_workers=data_loader_worker, collate_fn=collate_test,
+                                              shuffle=False, pin_memory=True, sampler=sampler_test)
 
 #
 # Create the model
 #
-model, global_fixed = create_model_load_weights(n_class, mode, evaluation, path_g=path_g, path_g2l=path_g2l, path_l2g=path_l2g)
-optimizer = get_optimizer(model, mode, learning_rate=learning_rate)
+model, global_fixed = create_model_load_weights(n_class, mode, evaluation, path_g=path_g, 
+                                                path_g2l=path_g2l, path_l2g=path_l2g)
+'''
+if (torch.distributed.get_rank()==0):
+    for name, param in model.named_parameters(): 
+        print(name, True if param.grad is not None else False)
+'''
+
+# model_ddp = DDP(model, device_ids=[local_rank], output_device=local_rank)
+model_ddp = DDP(model)
+
+optimizer = get_optimizer(model_ddp, mode, learning_rate=learning_rate)
 scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train))
 
 criterion1 = FocalLoss(gamma=3)
@@ -125,9 +190,11 @@ trainer   = Trainer(criterion, optimizer, n_class, size_g, size_p, sub_batch_siz
 evaluator = Evaluator(n_class, size_g, size_p, sub_batch_size, mode, test)
 
 best_pred = 0.0
-print("start training......")
+if (torch.distributed.get_rank()==0):
+    print("start training......")
+
 for epoch in range(num_epochs):
-    trainer.set_train(model)
+    trainer.set_train(model_ddp)
     optimizer.zero_grad()
     
     # Huaxin: maybe should call scheduler outside of training epoch
@@ -143,7 +210,7 @@ for epoch in range(num_epochs):
         
         scheduler(optimizer, i_batch, epoch, best_pred)
         
-        loss = trainer.train(sample_batched, model, global_fixed)
+        loss = trainer.train(sample_batched, model_ddp, global_fixed)
         train_loss += loss.item()
         score_train, score_train_global, score_train_local = trainer.get_scores()
         if mode == 1:
@@ -159,7 +226,7 @@ for epoch in range(num_epochs):
 
     if (epoch+1) % 5 == 0:
         with torch.no_grad():
-            model.eval()
+            model_ddp.eval()
             print("\n"+"evaluating on epoch: ", (epoch+1))
 
             if test:
@@ -168,7 +235,7 @@ for epoch in range(num_epochs):
                 tbar = tqdm(dataloader_val)
 
             for i_batch, sample_batched in enumerate(tbar):
-                predictions, predictions_global, predictions_local = evaluator.eval_test(sample_batched, model, global_fixed)
+                predictions, predictions_global, predictions_local = evaluator.eval_test(sample_batched, model_ddp, global_fixed)
                 score_val, score_val_global, score_val_local = evaluator.get_scores()
                 if mode == 1: 
                     tbar.set_description('global mIoU: %.3f' % (np.mean(np.nan_to_num(score_val_global["iou"]))))
@@ -199,14 +266,25 @@ for epoch in range(num_epochs):
 
             # torch.cuda.empty_cache()
 
-            if mode == 1:
-                if not (test or evaluation): torch.save(model.state_dict(), os.path.join(model_path, path_g))
-            elif mode == 2:
-                if not (test or evaluation): torch.save(model.state_dict(), os.path.join(model_path, path_g2l))
-            elif mode == 3:
-                if not (test or evaluation): torch.save(model.state_dict(), os.path.join(model_path, path_l2g))
-            else:
-                pass
+            if torch.distributed.get_rank() == 0:
+                # All processes should see same parameters as they all start from same
+                # random parameters and gradients are synchronized in backward passes.
+                # Therefore, saving it in one process is sufficient.
+                if mode == 1:
+                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g))
+                elif mode == 2:
+                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g2l))
+                elif mode == 3:
+                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_l2g))
+                else:
+                    pass
+            
+            # Use a barrier() to make sure that below work started after rank 0 finish saving the states.
+            print("==== ==== before torch.distributed.barrier")
+            print("Current world_size:", torch.distributed.get_world_size())
+            torch.distributed.broadcast(torch.tensor([1], device="cuda"), 0)
+            torch.cuda.synchronize()
+            print("==== ==== after torch.distributed.barrier")
             
             if test:
                 break

@@ -33,7 +33,7 @@ class Options():
         parser.add_argument('--lamb_fmreg', type=float, default=0.15, help='loss weight feature map regularization')
         parser.add_argument('--data_loader_worker', type=int, default=1, help='works to load data')
         parser.add_argument('--image_level', type=int, default=2, help='the image level in svs to be used')
-        parser.add_argument("--local_rank", type=int, default=0)
+        parser.add_argument("--local_rank", type=int, default=-1)
 
         # the parser
         self.parser = parser

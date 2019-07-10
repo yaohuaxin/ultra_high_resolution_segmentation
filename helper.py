@@ -257,7 +257,7 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
     return model, global_fixed
 
 
-def get_optimizer(model, mode=1, parallel=False, learning_rate=2e-5):
+def get_optimizer(model, mode=1, parallel=True, learning_rate=2e-5):
     if not parallel:
         if mode == 1 or mode == 3:
             # train global
@@ -320,7 +320,7 @@ class Trainer(object):
         # self.step = (size0[0] - size_p[0]) // (n - 1)
         # self.template, self.coordinates = template_patch2global(size0, size_p, n, self.step)
     
-    def set_train(self, model, parallel=False):
+    def set_train(self, model, parallel=True):
         if not parallel:
             model.ensemble_conv.train()
             if self.mode == 1 or self.mode == 3:
