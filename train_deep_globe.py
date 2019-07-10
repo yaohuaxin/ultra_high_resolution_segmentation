@@ -227,7 +227,7 @@ for epoch in range(num_epochs):
     if (epoch+1) % 5 == 0:
         with torch.no_grad():
             model_ddp.eval()
-            print("\n"+"evaluating on epoch: ", (epoch+1))
+            print("\n"+"evaluating after epoch: ", epoch)
 
             if test:
                 tbar = tqdm(dataloader_test)
@@ -325,5 +325,3 @@ for epoch in range(num_epochs):
                     # writer.add_scalars('IoU', {'train iou': np.mean(np.nan_to_num(score_train["iou"])), 'validation iou': np.mean(np.nan_to_num(score_val["iou"]))}, epoch)
 
 if not evaluation: f_log.close()
-'''
-'''
