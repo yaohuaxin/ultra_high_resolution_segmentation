@@ -19,45 +19,66 @@ from tensorboardX import SummaryWriter
 from helper import create_model_load_weights, get_optimizer, Trainer, Evaluator, collate, collate_test
 from option import Options
 
+#
+# System wide configurations
+#
 np.set_printoptions(linewidth=200)
-
-args = Options().parse()
-n_class = args.n_class
-
 # torch.cuda.synchronize()
 # torch.backends.cudnn.benchmark = True
-
-# Huaxin
 # torch.backends.cudnn.enabled = False
-
 torch.backends.cudnn.deterministic = True
 
-data_path = args.data_path
+# Enable LMS (Large model support)
+torch.cuda.set_enabled_lms(True)
+
+#
+# Application Parameters
+#
+args = Options().parse()
+
+task_name   = args.task_name
+n_class     = args.n_class
+data_path   = args.data_path
 image_level = args.image_level
-
-model_path = args.model_path
-if not os.path.isdir(model_path): pathlib.Path(model_path).mkdir(parents=True)
-
-log_path = args.log_path
-if not os.path.isdir(log_path): pathlib.Path(log_path).mkdir(parents=True)
+model_path  = args.model_path
+log_path    = args.log_path
 data_loader_worker = args.data_loader_worker
-print("Data loader workers: ", data_loader_worker)
 
-task_name = args.task_name
-
-print(task_name)
-###################################
-
-mode = args.mode # 1: train global; 2: train local from global; 3: train global from local
+# Running mode definations: 
+#     1: train global; 
+#     2: train local from global; 
+#     3: train global from local
+mode       = args.mode
 evaluation = args.evaluation
-test = evaluation and False
-print("mode:", mode, "; evaluation:", evaluation, "; test:", test)
-print("    Mode: 1: train global; 2: train local from global; 3: train global from local")
+test       = evaluation and False
 
-###################################
-print("preparing datasets and dataloaders......")
-batch_size = args.batch_size
+##### sizes are (w, h) ##############################
+# make sure margin / 32 is over 1.5 AND size_g is divisible by 4
+size_g         = (args.size_g, args.size_g) # resized global image
+size_p         = (args.size_p, args.size_p) # cropped local patch size
+batch_size     = args.batch_size
+sub_batch_size = args.sub_batch_size        # batch size for train local patches
 
+num_epochs     = args.num_epochs
+learning_rate  = args.lr
+lamb_fmreg     = args.lamb_fmreg
+
+path_g   = os.path.join(model_path, args.path_g)
+path_g2l = os.path.join(model_path, args.path_g2l)
+path_l2g = os.path.join(model_path, args.path_l2g)
+
+print("============Model Information (Begin)==========================")
+print("Task name   :", task_name)
+print("Running mode:", mode, "; evaluation:", evaluation, "; test:", test)
+print("size_g:", size_g, "; batch_size  :", batch_size, "; size_p", size_p, "; sub_batch_size:", sub_batch_size)
+print("============Model Information (End)============================")
+
+if not os.path.isdir(model_path): pathlib.Path(model_path).mkdir(parents=True)
+if not os.path.isdir(log_path): pathlib.Path(log_path).mkdir(parents=True)
+
+#
+# Dataset and Dataloader
+#
 ids_images = []
 for phase_fold in os.listdir(data_path):
     if os.path.isdir(os.path.join(data_path, phase_fold)):
@@ -65,21 +86,16 @@ for phase_fold in os.listdir(data_path):
             if os.path.isdir(os.path.join(data_path, phase_fold, image_fold)):
                 ids_images.append(os.path.join(phase_fold, image_fold))
 
-ids_train = ids_images[0:-5]
-ids_val   = ids_images[-5:]
-ids_test  = ids_images[-5:]
+ids_train = ids_images[0:-8]
+ids_val   = ids_images[-8:]
+ids_test  = ids_images[-8:]
 
-print("==== ids_train: ", ids_train)
-print("==== ids_val: ", ids_val)
-print("==== ids_test: ", ids_test)
+# print("==== ids_train: ", ids_train)
+# print("==== ids_val: ", ids_val)
+# print("==== ids_test: ", ids_test)
 
 dataset_train = PAIP2019(data_path, ids_train, label=True, transform=True, image_level=image_level)
 dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate, shuffle=True, pin_memory=True)
-#sample = dataset_train[0]
-#print("Image size: ", sample['image'].size)
-#print("Label size: ", sample['label'].size)
-#dataset_train[1]
-#dataset_train[2]
 
 dataset_val = PAIP2019(data_path, ids_val, label=True, image_level=image_level)
 dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate, shuffle=False, pin_memory=True)
@@ -87,35 +103,12 @@ dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, batch_size=bat
 dataset_test = PAIP2019(data_path, ids_test, label=False, image_level=image_level)
 dataloader_test = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=batch_size, num_workers=data_loader_worker, collate_fn=collate_test, shuffle=False, pin_memory=True)
 
-##### sizes are (w, h) ##############################
-# make sure margin / 32 is over 1.5 AND size_g is divisible by 4
-size_g = (args.size_g, args.size_g) # resized global image
-size_p = (args.size_p, args.size_p) # cropped local patch size
-sub_batch_size = args.sub_batch_size # batch size for train local patches
-
-###################################
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Use device: ", device)
-
-print("creating models......")
-
-path_g   = os.path.join(model_path, args.path_g)
-path_g2l = os.path.join(model_path, args.path_g2l)
-path_l2g = os.path.join(model_path, args.path_l2g)
-
-torch.cuda.set_enabled_lms(True)
-
+#
+# Create the model
+#
 model, global_fixed = create_model_load_weights(n_class, mode, evaluation, path_g=path_g, path_g2l=path_g2l, path_l2g=path_l2g)
-
-###################################
-num_epochs    = args.num_epochs
-learning_rate = args.lr
-lamb_fmreg    = args.lamb_fmreg
-
 optimizer = get_optimizer(model, mode, learning_rate=learning_rate)
-
 scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train))
-##################################
 
 criterion1 = FocalLoss(gamma=3)
 criterion2 = nn.CrossEntropyLoss()
