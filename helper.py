@@ -195,14 +195,14 @@ def collate_test(batch):
     return {'image': image, 'id': id}
 
 
-def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, path_g2l=None, path_l2g=None):
+def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, path_g2l=None, path_l2g=None, local_rank=0):
     model = fpn(n_class)
     #model = nn.DataParallel(model)
     model = model.cuda()
 
     if (mode == 2 and not evaluation) or (mode == 1 and evaluation):
         # load fixed basic global branch
-        partial = torch.load(path_g)
+        partial = torch.load(path_g, map_location=torch.device('cuda:{}'.format(local_rank)))
         state = model.state_dict()
         # 1. filter out unnecessary keys
         pretrained_dict = {k: v for k, v in partial.items() if k in state and "local" not in k}
@@ -212,7 +212,7 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
         model.load_state_dict(state)
 
     if (mode == 3 and not evaluation) or (mode == 2 and evaluation):
-        partial = torch.load(path_g2l)
+        partial = torch.load(path_g2l, map_location=torch.device('cuda:{}'.format(local_rank)))
         state = model.state_dict()
         # 1. filter out unnecessary keys
         pretrained_dict = {k: v for k, v in partial.items() if k in state}# and "global" not in k}
@@ -227,7 +227,7 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
         global_fixed = fpn(n_class)
         global_fixed = nn.DataParallel(global_fixed)
         global_fixed = global_fixed.cuda()
-        partial = torch.load(path_g)
+        partial = torch.load(path_g, map_location=torch.device('cuda:{}'.format(local_rank)))
         state = global_fixed.state_dict()
         # 1. filter out unnecessary keys
         pretrained_dict = {k: v for k, v in partial.items() if k in state and "local" not in k}
@@ -238,7 +238,7 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
         global_fixed.eval()
 
     if mode == 3 and evaluation:
-        partial = torch.load(path_l2g)
+        partial = torch.load(path_l2g, map_location=torch.device('cuda:{}'.format(local_rank)))
         state = model.state_dict()
         # 1. filter out unnecessary keys
         pretrained_dict = {k: v for k, v in partial.items() if k in state}# and "global" not in k}

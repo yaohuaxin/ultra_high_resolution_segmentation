@@ -162,7 +162,7 @@ dataloader_test = torch.utils.data.DataLoader(dataset=dataset_test, batch_size=b
 # Create the model
 #
 model, global_fixed = create_model_load_weights(n_class, mode, evaluation, path_g=path_g, 
-                                                path_g2l=path_g2l, path_l2g=path_l2g)
+                                                path_g2l=path_g2l, path_l2g=path_l2g, local_rank=local_rank)
 '''
 if (torch.distributed.get_rank()==0):
     for name, param in model.named_parameters(): 
@@ -183,8 +183,8 @@ criterion  = lambda x,y: criterion1(x, y)
 mse = nn.MSELoss()
 
 if not evaluation:
-    writer = SummaryWriter(logdir=log_path + task_name)
-    f_log = open(log_path + task_name + ".log", 'w')
+    writer = SummaryWriter(logdir=log_path + task_name + ".rank_" + str(torch.distributed.get_rank()))
+    f_log = open(log_path + task_name + ".rank_" + str(torch.distributed.get_rank()) + ".log", 'w')
 
 trainer   = Trainer(criterion, optimizer, n_class, size_g, size_p, sub_batch_size, mode, lamb_fmreg)
 evaluator = Evaluator(n_class, size_g, size_p, sub_batch_size, mode, test)
