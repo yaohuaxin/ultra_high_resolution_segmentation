@@ -101,8 +101,7 @@ if (torch.distributed.get_rank()==0):
     pass
 
 # to synchronize start of time
-torch.distributed.broadcast(torch.tensor([1], device="cuda"), 0)
-torch.cuda.synchronize()
+torch.distributed.barrier()
 
 # Explicitly setting seed to make sure that models created in all processes 
 # start from same random weights and biases.
@@ -280,11 +279,7 @@ for epoch in range(num_epochs):
                     pass
             
             # Use a barrier() to make sure that below work started after rank 0 finish saving the states.
-            print("==== ==== before torch.distributed.barrier")
-            print("Current world_size:", torch.distributed.get_world_size())
-            torch.distributed.broadcast(torch.tensor([1], device="cuda"), 0)
-            torch.cuda.synchronize()
-            print("==== ==== after torch.distributed.barrier")
+            torch.distributed.barrier()
             
             if test:
                 break
