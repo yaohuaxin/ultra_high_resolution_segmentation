@@ -381,9 +381,22 @@ class Trainer(object):
         if self.mode == 2:
             # training with patches ###########################################
             for i in range(len(images)):
+                # sync the start for each global image
+                torch.distributed.barrier()
+                #print("Will start training global image:", i, " on rank  :", torch.distributed.get_rank())
+                group = torch.distributed.new_group(range(torch.distributed.get_world_size()))
+                coordinate_size = torch.tensor([len(coordinates[i])], dtype=torch.int32).cuda()
+                torch.distributed.all_reduce(coordinate_size, op=torch.distributed.ReduceOp.MAX, group=group)
+                #print("Will train:", coordinate_size.item(), "loops in global image.", "On rank  :", torch.distributed.get_rank())
+                
                 j = 0
+                _loop = 0
                 # while j < self.n**2:
-                while j < len(coordinates[i]):
+                #print("==== ==== len(coordinates[i]):", len(coordinates[i]), ", at rank:", torch.distributed.get_rank())
+                #while j < len(coordinates[i]):
+                #while j in range(6):
+                #while _ in range(coordinate_size.item()):
+                while _loop < coordinate_size.item():
                     patches_var = images_transform(patches[i][j : j+self.sub_batch_size]) # b, c, h, w
                     label_patches_var = masks_transform(resize(label_patches[i][j : j+self.sub_batch_size], (self.size_p[0] // 4, self.size_p[1] // 4), label=True)) # down 1/4 for loss
                     # label_patches_var = masks_transform(label_patches[i][j : j+self.sub_batch_size])
@@ -396,7 +409,11 @@ class Trainer(object):
                     # patch predictions
                     predicted_patches[i][j:j+output_patches.size()[0]] = F.interpolate(output_patches, size=self.size_p, mode='nearest').data.cpu().numpy()
                     predicted_ensembles[i][j:j+output_ensembles.size()[0]] = F.interpolate(output_ensembles, size=self.size_p, mode='nearest').data.cpu().numpy()
-                    j += self.sub_batch_size
+                    # Because we choose loop the biggest coordinate_size in all ranks, 
+                    # make sure not cross the border for current rank
+                    j = (j+self.sub_batch_size)%len(coordinates[i])
+                    _loop += self.sub_batch_size
+                    #print("==== ==== nested loop:", j, ", at rank:", torch.distributed.get_rank())
                 outputs_global[i] = output_global
             outputs_global = torch.cat(outputs_global, dim=0)
 

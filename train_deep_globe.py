@@ -20,11 +20,11 @@ from tensorboardX import SummaryWriter
 from helper import create_model_load_weights, get_optimizer, Trainer, Evaluator, collate, collate_test
 from option import Options
 
-from torch.nn.parallel import DistributedDataParallel as DDP
+# from torch.nn.parallel import DistributedDataParallel as DDP
 # Why use apex: https://github.com/pytorch/pytorch/issues/13273
 # Tested with https://github.com/NVIDIA/apex.git,
 #     Commit ID: 665b2dd7dc9d5129d7541bad612c1d86ba4b6818
-# from apex.parallel import DistributedDataParallel as DDP
+from apex.parallel import DistributedDataParallel as DDP
 
 #
 # System wide configurations
@@ -168,8 +168,8 @@ if (torch.distributed.get_rank()==0):
         print(name, True if param.grad is not None else False)
 '''
 
-model_ddp = DDP(model, device_ids=[local_rank], output_device=local_rank)
-# model_ddp = DDP(model)
+# model_ddp = DDP(model, device_ids=[local_rank], output_device=local_rank)
+model_ddp = DDP(model)
 
 optimizer = get_optimizer(model_ddp, mode, learning_rate=learning_rate)
 scheduler = LR_Scheduler('poly', learning_rate, num_epochs, len(dataloader_train))
@@ -274,11 +274,11 @@ for epoch in range(num_epochs):
                 # random parameters and gradients are synchronized in backward passes.
                 # Therefore, saving it in one process is sufficient.
                 if mode == 1:
-                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g))
+                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g+"."+str(epoch)))
                 elif mode == 2:
-                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g2l))
+                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_g2l+"."+str(epoch)))
                 elif mode == 3:
-                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_l2g))
+                    if not (test or evaluation): torch.save(model_ddp.state_dict(), os.path.join(model_path, path_l2g+"."+str(epoch)))
                 else:
                     pass
             
