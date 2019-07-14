@@ -223,9 +223,9 @@ for epoch in range(num_epochs):
     trainer.reset_metrics()
     # torch.cuda.empty_cache()
 
-    print("Epoch:", epoch, "training finished on rank:", torch.distributed.get_rank())
+    #print("Epoch:", epoch, "training finished on rank:", torch.distributed.get_rank())
     torch.distributed.barrier()
-    print("Will start next training/testing on rank  :", torch.distributed.get_rank())
+    #print("Will start next training/testing on rank  :", torch.distributed.get_rank())
 
     if (epoch+1) % 5 == 0:
         with torch.no_grad():

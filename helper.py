@@ -384,9 +384,9 @@ class Trainer(object):
                 # sync the start for each global image
                 torch.distributed.barrier()
                 #print("Will start training global image:", i, " on rank  :", torch.distributed.get_rank())
-                group = torch.distributed.new_group(range(torch.distributed.get_world_size()))
+                #group = torch.distributed.new_group(range(torch.distributed.get_world_size()))
                 coordinate_size = torch.tensor([len(coordinates[i])], dtype=torch.int32).cuda()
-                torch.distributed.all_reduce(coordinate_size, op=torch.distributed.ReduceOp.MAX, group=group)
+                torch.distributed.all_reduce(coordinate_size, op=torch.distributed.ReduceOp.MAX)
                 #print("Will train:", coordinate_size.item(), "loops in global image.", "On rank  :", torch.distributed.get_rank())
                 
                 j = 0
