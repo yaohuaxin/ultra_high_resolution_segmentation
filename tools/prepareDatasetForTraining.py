@@ -119,7 +119,7 @@ def main():
     for fold in packageFolds:
         print(fold)
     
-    p = Pool(10)
+    p = Pool(6)
     p.map(resize, packageFolds)
 
     
