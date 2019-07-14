@@ -15,6 +15,6 @@ python -u train_deep_globe.py \
 --path_g   "PAIP2019-global.pth" \
 --path_g2l "PAIP2019-global2local.pth" \
 --path_l2g "PAIP2019-local2global.pth" \
---data_loader_worker 10 \
+--data_loader_worker 0 \
 --image_level 1 \
 
