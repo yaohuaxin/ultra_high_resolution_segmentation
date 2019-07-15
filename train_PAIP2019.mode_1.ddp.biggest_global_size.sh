@@ -15,4 +15,4 @@ python3.6 -u -m torch.distributed.launch --nproc_per_node 4 --nnodes 1 train_dee
 --path_g2l "PAIP2019-global2local.pth" \
 --path_l2g "PAIP2019-local2global.pth" \
 --data_loader_worker 0 \
---image_level 2 \
+--image_level 1 \
